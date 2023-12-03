@@ -1,0 +1,41 @@
+---
+title: "Writeup"
+author: "Harris Goodman"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The Methodology - Problem Definition
+To approach this project, I used the General Data Science Mehodology by John Rallins due to its wide applicability and detailed process that would allow me to step through the project carefully. Although it is not always the best suited for teams, the methodology was effective for an indivdual project.
+The first step is understanding the problem which was predicting how many stars a certain user would give a business on yelp. The data provided was a selection from the Yelp database, comprising predominantly of user reviews, user account characteristics and information on the businesses. This data could be used to train a model that given equivalent data on a user and a business, could predict how many stars that user was likely to give the business.
+
+## Data Understanding and Organisation
+With a vast selection of data available, it was important to understand how useful certain parts would be in answering the given question. Primarily, an understanding of the user and the business characteristics as well as their history with stars and ratings on yelp would provide a solid foundation to construct the model from. In order to make the data usable, it needed to be combined into a single dataset from the five smaller data sets. Initially, I removed all the open text fields from the data as although they could prove useful in predicting based on specific words in the text, this model is not using sentiment analysis. This also held for values like name of business and street address. Additionally, most of the business attribute fields were full of missing data, with as little as 0.03% of some categories having any data in. Despite dealing with missing data elsewhere in the project, the nature of these attributes of being very specific, often referring to specific sectors (ResaurantPriceRange2) and being difficult to impute, they were removed from the data to avoid reducing the analysis to only restaurants with no missing values.
+User data also had large amounts of missing values, especially in respect to the users without accounts but the nature of this data made it more manageable to impute. As most of the data was count data, and was already skewed towards zero, the lack of account suggests that the user could also be attributed a zero value as any non-zero value would have been a false attribution of praise to the user and due to the fact it would have been applied in bulk, it would have shifted the distribution more than attributing a zero value to everyone. The most difficult data to impute was the user's stars as they were values in the range of 1 to 5 based on the user's average review. In this case the distribution was analysed and the median value was assigned to all the missing values which, although not ideal, was done to ensure the average was not misrepresented. The ideal solution would have been to assign all users without an account, and therefore missing the average stars value, the number of stars they provided in the review in question. Although this could have worked for the training data set, the nature of attempting to predict stars means that it would not work with the test data set as it would constitute information leak and would not be scalable when the model was applied to data to predict missing values of stars.
+The datasets were then combined by matching the user and business id's together, In total, the data consisted of 34 independent variables across 1,398,056 observations.
+
+##Modelling
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

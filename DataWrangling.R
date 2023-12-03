@@ -59,7 +59,8 @@ names(business_data) <- c('business_id','city','state','latitude','longitude','b
 #Checkin Data:
 names(checkin_data)
 head(checkin_data)
-#Checkin Data is checkins by Yelp, not relevant
+checkin_data <- checkin_data %>% mutate(checkin_number = 1 + str_count(date, ","))
+checkin_data[c('date')] <- list(NULL)
 
 #Review Data:
 names(review_data_small)
@@ -77,7 +78,9 @@ names(tip_data)
 dim(tip_data)
 head(tip_data)
 tip_data %>% summary(compliment_count)
-tip_data[c('text')] <- list(NULL) #Remove text column
+tip_data[c('text','date')] <- list(NULL) #Remove text column
+tip_data <- tip_data %>% mutate(tip = 1)
+names(tip_data) <- c('user_id','business_id','tip_compliments','tip')
 #tip_data <- tip_data %>% separate(date,c('tip_year','tip_month','tip_day'))
 #tip_data$tip_year <- as.numeric(tip_data$tip_year)
 #tip_data$tip_month <- as.numeric(tip_data$tip_month)
@@ -100,6 +103,10 @@ review_data_small <- left_join(review_data_small,user_data_small,'user_id')
 rm(user_data_small)
 review_data_small <- left_join(review_data_small,business_data,'business_id')
 rm(business_data)
+review_data_small <- left_join(review_data_small,tip_data,by = c('business_id' = 'business_id','user_id'='user_id'))
+rm(tip_data)
+review_data_small <- left_join(review_data_small,checkin_data,'business_id')
+rm(checkin_data)
 (colSums(!is.na(review_data_small))/nrow(review_data_small))*100
 
 #Remove the IDs to make modelling easier
@@ -147,6 +154,14 @@ ggplot(train, aes(user_stars)) + geom_histogram()
 train <- train %>% mutate(user_stars = ifelse(is.na(user_stars), median(user_stars, na.rm=TRUE), user_stars))
 ggplot(train, aes(user_stars)) + geom_histogram()
 
+#Tip and Checkin Data
+ggplot(train, aes(checkin_number)) + geom_histogram()
+train <- train %>% mutate(checkin_number = ifelse(is.na(checkin_number),0,checkin_number))
+ggplot(train, aes(tip)) + geom_histogram()
+train <- train %>% mutate(tip = ifelse(is.na(tip),0,tip))
+ggplot(train, aes(tip_compliments)) + geom_histogram()
+train <- train %>% mutate(tip_compliments = ifelse(is.na(tip_compliments),0,tip))
+
 #Do the same for the test data:
 test <- test %>% mutate(user_review_count = ifelse(is.na(user_review_count), 0, user_review_count))
 test <- test %>% mutate(yelping_since = ifelse(is.na(yelping_since), year, yelping_since))
@@ -167,6 +182,17 @@ test <- test %>% mutate(user_useful = ifelse(is.na(user_useful), 0, user_useful)
                           compliment_photos = ifelse(is.na(compliment_photos), 0, compliment_photos)
 )
 test <- test %>% mutate(user_stars = ifelse(is.na(user_stars), median(user_stars, na.rm=TRUE), user_stars))
+test <- test %>% mutate(checkin_number = ifelse(is.na(checkin_number),0,checkin_number))
+test <- test %>% mutate(tip = ifelse(is.na(tip),0,tip))
+test <- test %>% mutate(tip_compliments = ifelse(is.na(tip_compliments),0,tip))
+
+(colSums(!is.na(test))/nrow(test))*100
+
+save.image()
+
+save(test, file = "test.Rda")
+rm(test)
+gc()
 
 #Explore the data
 ggplot(train, aes(x=stars)) + geom_bar()
@@ -186,31 +212,44 @@ linear_prediction <- predict(linear,newdata=test)
 coeftest(linear, vcov = vcovHC(linear, type="HC3"))
 mean((test$stars - linear_prediction)^2)
 
+ridge_multi <- glmnet(train[,-c(1,26,27)],train[,1],family = "gaussian",alpha = 0)
+multi_predict <- predict(ridge_multi, )
+
 #Ridge Regression with Cross Validation MSE = 1.509343
-ridge_cv <- cv.glmnet(as.matrix(train[,-c(1,26,27)]), as.matrix(train[,1]), alpha = 0, nfolds = 3)
+ridge_cv <- cv.glmnet(as.matrix(train[,-c(1,26,27)]), as.matrix(train[,1]), alpha = 0, nfolds = 3, family = binomial(link="logit"))
 plot(ridge_cv)
 lambda_ridge_cv <- ridge_cv$lambda.min
-ridge <- glmnet(train[,-c(1,26,27)], train[,1], alpha = 0, lambda = lambda_ridge_cv, thresh = 1e-12)
+ridge <- glmnet(train[,-c(1,26,27)], train[,1], alpha = 0, lambda = lambda_ridge_cv, thresh = 1e-12, family = binomial(link="logit"))
 ridge_prediction <- predict(ridge, s = lambda_ridge_cv, newx = as.matrix(test[,-c(1,26,27)]))
 mean((ridge_prediction - test[,1]) ^ 2)
 
-#LASSO Regression with Cross Validation MSE = 
-lasso_cv <- cv.glmnet(as.matrix(train[,-c(1,26,27)]), as.matrix(train[,1]), alpha = 1, nfolds = 3)
-plot(cv.out)
-lambda_LASSO_cv <- cv.out$lambda.min
-LASSO.mod<-glmnet(mtcarsx_train, mtcarsy_train, alpha = 1, lambda = lambda_LASSO_cv, thresh = 1e-12)
-coef(LASSO.mod)
-LASSO.pred <- predict(LASSO.mod, s = lambda_LASSO_cv, newx = as.matrix(mtcarsx_test))
-LASSO_MSE<- mean((LASSO.pred - mtcarsy_test) ^ 2)
+#Ridge with Multinomial
+ridge_cv_1 <- cv.glmnet(as.matrix(train[,-c(1,26,27)]), as.matrix(train[,1]), alpha = 0, nfolds = 3)
+plot(ridge_cv_1)
+lambda_ridge_cv_1 <- ridge_cv$lambda.min
+ridge_1 <- glmnet(train[,-c(1,26,27)], train[,1], alpha = 0, lambda = lambda_ridge_cv_1, thresh = 1e-12)
+ridge_prediction_1 <- predict(ridge, s = lambda_ridge_cv_1, newx = as.matrix(test[,-c(1,26,27)]))
+mean((ridge_prediction - test[,1]) ^ 2)
 
-#Decision Tree with 'tree' MSE 1.653435
+#LASSO Regression with Cross Validation MSE = 1.506188
+lasso_cv <- cv.glmnet(as.matrix(train[,-c(1,26,27)]), as.matrix(train[,1]), alpha = 1, nfolds = 3)
+plot(lasso_cv)
+lambda_LASSO_cv <- lasso_cv$lambda.min
+LASSO<-glmnet(train[,-c(1,26,27)], train[,1], alpha = 1, lambda = lambda_LASSO_cv, thresh = 1e-12)
+coef(LASSO)
+LASSO_prediction <- predict(LASSO, s = lambda_LASSO_cv, newx = as.matrix(test[,-c(1,26,27)]))
+mean((LASSO_prediction - test[,1]) ^ 2)
+
+train$stars <- as.factor(train$stars)
+
+#Decision Tree with 'tree' MSE 1.653435 (MSE 14.80175)
 tree1 <- tree(stars ~ ., data = train)
 tree1_prediction <- predict(tree1, newdata = test)
 summary(tree1)
 summary(tree1_prediction)
 mean((tree1_prediction - test$stars)^2)
 
-#Decision Tree with 'rpart' MSE = 1.653435
+#Decision Tree with 'rpart' MSE = 1.653435 (MSE = 14.8)
 tree2 <- rpart(stars ~ ., data = train[,-26,27])
 rpart.plot(tree2)
 tree2_prediction <- predict(tree2, newdata = test)
@@ -219,17 +258,17 @@ summary(tree2_prediction)
 mean((tree2_prediction - test$stars)^2) 
 
 #Decision Tree with Bagging
-bag <- bagging(stars~., data=train, nbagg = 50, coob = TRUE, control = rpart.control(minsplit = 2, cp = 0.1))
+bag <- bagging(stars~., data=train1, nbagg = 5, coob = TRUE, control = rpart.control(minsplit = 10, cp = 1))
 bag #MSE 1.3074
 
-#Decision Tree with Boosting
-boost <- boosting(stars~., data=train, boos=TRUE, mfinal=50)
-summary(model_adaboost)
+#Decision Tree with Boosting Error = 0.4973
+boost <- boosting(stars~., data=train1, boos=TRUE, mfinal=10)
+summary(boost)
 boost_prediction <- predict(boost, newdata = test)
 
-#Random Forests
+#Random Forests Error Rate = 0.671
 set.seed(1312)
-model_RF<-randomForest(stars~.,data=train, ntree=50)
+model_RF<-randomForest(stars~.,data=train1, ntree=100)
 pred_RF_test = predict(model_RF, test)
 mean(model_RF[["err.rate"]])
 
