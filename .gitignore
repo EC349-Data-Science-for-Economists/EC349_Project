@@ -50,7 +50,7 @@ rsconnect/
 
 #Data File
 data/
-.Rda
-.rds
-.json
+*.Rda
+*.rds
+*.json
 
