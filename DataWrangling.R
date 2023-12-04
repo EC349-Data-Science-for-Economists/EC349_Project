@@ -112,6 +112,8 @@ rm(checkin_data)
 #Remove the IDs to make modelling easier
 review_data_small[c('review_id','user_id','business_id')] <- list(NULL)
 
+## Removing Extra Data to reduce Computational Load:
+
 #Split the data into train and test
 set.seed(1)
 parts = createDataPartition(review_data_small$stars, p = 1-(10002/nrow(review_data_small)), list = F)
@@ -242,14 +244,16 @@ mean((LASSO_prediction - test[,1]) ^ 2)
 
 train$stars <- as.factor(train$stars)
 
-#Decision Tree with 'tree' MSE 1.653435 (MSE 14.80175)
+
+#Decision Tree with 'tree' Misclassification Error Rate: 0.4952
+#Residual Mean Deviance: 2.556
 tree1 <- tree(stars ~ ., data = train)
 tree1_prediction <- predict(tree1, newdata = test)
 summary(tree1)
 summary(tree1_prediction)
-mean((tree1_prediction - test$stars)^2)
+tree1_prediction
 
-#Decision Tree with 'rpart' MSE = 1.653435 (MSE = 14.8)
+#Decision Tree with 'rpart' Misclassification Error Rate: 
 tree2 <- rpart(stars ~ ., data = train[,-26,27])
 rpart.plot(tree2)
 tree2_prediction <- predict(tree2, newdata = test)
@@ -258,13 +262,20 @@ summary(tree2_prediction)
 mean((tree2_prediction - test$stars)^2) 
 
 #Decision Tree with Bagging
-bag <- bagging(stars~., data=train1, nbagg = 5, coob = TRUE, control = rpart.control(minsplit = 10, cp = 1))
+bag <- bagging(stars~., data=train1, nbagg = 5, coob = TRUE, control = rpart.control(minsplit = 1000, cp = 10))
 bag #MSE 1.3074
 
+#Remove Unnecessary Data
+names(train)
+train[c("user_useful","user_funny","user_cool","user_fans","user_stars","compliment_hot","compliment_more","compliment_profile","compliment_cute","compliment_list","compliment_note","compliment_plain","compliment_cool","compliment_funny","compliment_writer","compliment_photos")] <- list(NULL)
+train[c("day")] <- list(NULL)
+train[c("")]
+
 #Decision Tree with Boosting Error = 0.4973
-boost <- boosting(stars~., data=train1, boos=TRUE, mfinal=10)
+boost <- boosting(stars~., data=train, boos=TRUE, mfinal=10)
 summary(boost)
 boost_prediction <- predict(boost, newdata = test)
+boost_prediction
 
 #Random Forests Error Rate = 0.671
 set.seed(1312)
