@@ -3,9 +3,15 @@ library(jsonlite)     #Importing JSON Files
 library(glmnet)       #Building Linear Models
 library(ggplot2)      #Plotting Graphs
 library(tidyverse)    #Manipulating the Data
+library(corrplot)     #Plotting Correlation Matrices
 library(sandwich)     #Robust Standard Errors
 library(lmtest)       #Testing the Linear Model
 library(caret)        #Splitting Data into Train and Test
+require(MASS)         #Used for Ordinal Prediction
+require(tree)         #Used for Decision Trees
+require(rpart)        #Used for Decision Trees
+require(rpart.plot)   #Plot Decision Trees
+
 
 # Clear the R Workspace and free up unused RAM
 cat("\014")  
@@ -229,12 +235,14 @@ save.image()
 ggplot(train, aes(x=stars)) + geom_bar()
 ggplot(train, aes(x=user_review_count, y=stars)) + geom_point() + geom_smooth(method="lm")
 ggplot(train, aes(x=business_review_count, y=stars)) + geom_point() + geom_smooth(method="lm")
-ggplot(train, aes(x=user_stars, y=stars)) + geom_point() + geom_smooth(method="lm")
-ggplot(train, aes(y=business_stars, x=stars)) + geom_point() + geom_smooth(method="lm")
+ggplot(train, aes(x=user_stars, y=stars)) + geom_point() + geom_smooth(method="lm") 
+ggplot(train, aes(x=business_stars, y=stars)) + geom_point() + geom_smooth(method="lm")
+ggplot(train, aes(x=business_stars, y=stars)) + geom_bin_2d() + geom_smooth(method = "lm")
 ggplot(train, aes(x=year, y=stars)) + geom_point() + geom_smooth(method = "lm")
 
 #Looks at the correlation matrix between variables
 cor(train)
+corrplot(cor(train[,-c(26,27)], use = "na.or.complete"))
 
 #Tests some of the key variables and their correlation with stars
 cor.test(test$user_stars,test$stars)
@@ -256,76 +264,159 @@ linear1_error <- mean((test$stars - linear1_prediction)^2)
 linear2 <- glm(stars ~ ., data = train, family = poisson)
 summary(linear2)
 linear2_prediction <- predict(linear2,newdata=test)
-linear2_error <- mean((test$stars - linear1_prediction)^2)
+linear2_error <- mean((test$stars - linear2_prediction)^2)
+summary(linear2_prediction)
 
 #Linear Model with fewer variables
 linear3 <- glm(stars ~ useful + funny + cool + year + month + yelping_since + user_useful + user_funny + user_cool + user_fans + user_stars + compliment_list + compliment_writer + business_stars + is_open +checkin_number, data = train, family = poisson)
 summary(linear3)
 linear3_prediction <- predict(linear3,newdata=test)
-linear3_error <- mean((test$stars - linear1_prediction)^2)
+linear3_error <- mean((test$stars - linear3_prediction)^2)
 
 #LASSO Model
-lasso1 <- 
+lasso1 <- glmnet(as.matrix(train[,-1]), as.matrix(train[,1]), lambda = 1, alpha = 1)
+coef(lasso1)
+lasso1_prediction <- predict(lasso1, s = 1, newx = as.matrix(test[,-1]))
+lasso1_error <- mean((test$stars - lasso1_prediction)^2)
+
+#LASSO with cross validation
+#Find the possible values of Lambda
+cross_validation <- cv.glmnet(as.matrix(train[,-1]), as.matrix(train[,1]), alpha = 1, nfolds = 3)
+plot(cross_validation)
+#Find the one that minimises MSE
+lambda_lasso <- cross_validation$lambda.min
+#Run the lasso model with that optimal value of Lambda
+lasso2 <- glmnet(as.matrix(train[,-1]), as.matrix(train[,1]), lambda = lambda_lasso, alpha = 1)
+coef(lasso2)
+#Predict using the new model
+lasso2_prediction <- predict(lasso2, s = lambda_lasso, newx = as.matrix(test[,-1]))
+#Find the MSE
+lasso2_error <- mean((test$stars - lasso2_prediction)^2)
+summary(lasso2_prediction)
+#Clean the output into integers
+lasso2_prediction <- round(lasso2_prediction, 0)
+lasso2_prediction[lasso2_prediction<1] <- 1
+lasso2_prediction[lasso2_prediction>5] <- 5
+summary(lasso2_prediction)
+#Test the new accuracy and MSE
+lasso2_error <- mean((test$stars - lasso2_prediction)^2)
+lasso2_accuracy <- sum(lasso2_prediction == test$stars)/nrow(test)
 
 
+#Clean the output of the linear model as well
+summary(linear1_prediction)
+linear1_prediction <- round(linear1_prediction, 0)
+linear1_prediction[linear1_prediction<1] <- 1
+linear1_prediction[linear1_prediction>5] <- 5
+summary(linear1_prediction)
+#Test the accuracy and error of the new model
+linear1_error <- mean((test$stars - linear1_prediction)^2)
+linear1_accuracy <- sum(linear1_prediction == test$stars)/nrow(test)
 
+#Implement a cross-validated Ridge Model
+cross_validation1 <- cv.glmnet(as.matrix(train[,-1]), as.matrix(train[,1]), alpha = 0, nfolds = 3)
+plot(cross_validation1)
+ridge_lambda <- cross_validation1$lambda.min
+ridge1 <- glmnet(train[,-1], train[,1], alpha = 0, lambda = ridge_lambda, thresh = 1e-12)
 
-#Transform stars into a categorical variable so it can be analysed as one.
+ridge_prediction <- predict(ridge1, s = ridge_lambda, newx = as.matrix(test[,-1]))
+ridge_error <- mean((ridge_prediction - test[,1]) ^ 2)
+
+#Clean the output and check accuracy of ridge model
+summary(ridge_prediction)
+ridge_prediction <- round(ridge_prediction, 0)
+ridge_prediction[ridge_prediction<1] <- 1
+ridge_prediction[ridge_prediction>5] <- 5
+summary(ridge_prediction)
+ridge_error <- mean((test$stars - ridge_prediction)^2)
+ridge_accuracy <- sum(ridge_prediction == test$stars)/nrow(test)
+
+#Implementing an ordinal model
+#Convert stars into a categorical variable
 train$stars <- as.factor(train$stars)
 
-#Decision Tree with 'tree' Misclassification Error Rate: 0.4952
-#Residual Mean Deviance: 2.556
-tree1 <- tree(stars ~ ., data = train)
-tree1_prediction <- predict(tree1, newdata = test)
-summary(tree1)
-summary(tree1_prediction)
-tree1_prediction
+#Run the ordinal model with business_stars and user_stars
+ordinal <- polr(stars ~ year + month + yelping_since + user_stars + business_stars + is_open, data = train, Hess=TRUE)
+summary(ordinal)
+ordinal_prediction <- predict(ordinal, newdata = test)
+ordinal_error <- mean((test$stars - as.numeric(ordinal_prediction))^2)
+ordinal_accuracy <- sum(as.numeric(ordinal_prediction) == test$stars)/nrow(test)
+summary(ordinal_prediction)
 
-#Decision Tree with 'rpart' Misclassification Error Rate: 
-tree2 <- rpart(stars ~ ., data = train1[,-8])
-rpart.plot(tree2)
-tree2_prediction <- predict(tree2, newdata = test)
-summary(tree2)
-summary(tree2_prediction)
-mean((tree2_prediction - test$stars)^2) 
-
-#Decision Tree with Boosting Error = 0.4973
-boost <- boosting(stars~., data=train, boos=TRUE, mfinal=4)
-summary(boost)
-boost_prediction <- predict(boost, newdata = test)
-boost_prediction
-
-#Random Forests Error Rate = 0.6584101
-set.seed(1312)
-model_RF<-randomForest(stars~.,data=train, ntree=25)
-pred_RF_test = predict(model_RF, test)
-mean(model_RF[["err.rate"]])
-
-#Sample the Training Data
 set.seed(1)
-parts1 = createDataPartition(train$stars, p = 0.3, list = F)
+parts1 = createDataPartition(train$stars, p = 0.1, list = F)
 train1 = train[parts1, ]
 rm(parts1)
 
-boost1 <- boosting(stars~., data=train1[,-c(8)], boos=TRUE, mfinal=4)
-boost_prediction <- predict(boost1, newdata = test)
-boost_prediction
+#LASSO with multinomial
+#Find the possible values of Lambda
+cross_validation_multi <- cv.glmnet(as.matrix(train1[,-1]), as.matrix(train1[,1]), alpha = 1, nfolds = 3,family="multinomial",type.multinomial="grouped")
+plot(cross_validation_multi)
+#Find the one that minimises MSE
+lambda_lasso_multi <- cross_validation_multi$lambda.min
+#Run the lasso model with that optimal value of Lambda
+lasso_multi <- glmnet(as.matrix(train[,-1]), as.matrix(train[,1]), lambda = lambda_lasso_multi, alpha = 1,family="multinomial")
+coef(lasso_multi)
+#Predict using the new model
+lasso_prediction_multi <- predict(lasso_multi, s = lambda_lasso_multi, newx = as.matrix(test[,-1]),type="class")
+#Find the Errors and Accuracy
+summary(as.numeric(lasso_prediction_multi))
+lasso_multi_error <- mean((test$stars - as.numeric(lasso_prediction_multi)^2))
+lasso2_accuracy <- sum(as.numeric(lasso_prediction_multi) == test$stars)/nrow(test)
+                          
 
-rm()
+#Remove the prediction matrices to save RAM
+rm(linear1_prediction)
+rm(linear2_prediction)
+rm(linear3_prediction)
+rm(lasso1_prediction)
+rm(lasso2_prediction)
+rm(ridge_prediction)
+rm(ordinal_prediction)
 
-set.seed(1)
-parts2 = createDataPartition(train$stars, p = 0.1, list = F)
-train2 = train[parts1, ]
-rm(parts2)
+##########################################
+
+#Decision Tree with 'rpart' 
+#Train the tree
+tree1 <- rpart(stars ~ ., data = train)
+#Plot the tree
+rpart.plot(tree1)
+#Predict using the tree
+tree1_prediction <- predict(tree1, newdata = test, type="class")
+summary(tree1)
+summary(tree1_prediction)
+#Determine the Error and Accuracy
+tree1_error <- sum(as.numeric(tree1_prediction) != test$stars)/nrow(test)
+tree1_accuracy <- sum(as.numeric(tree1_prediction) == test$stars)/nrow(test)
+
+
+#########################
+#Attempts to improve the decision tree were hampered by severe
+#problems in handling the computational load so despite best efforts
+#this has been removed from the analysis
+
+
+#Remove Excess variables to reduce the computational load
+#train1$stars <- as.numeric(train1$stars)
+#corrplot(cor(train1))
+#train1 <- train1[,c(1,4,5,8,11,14,24,26,27,28,29,30)]
+#corrplot(cor(train1))
+#train1$stars <- as.factor(train1$stars)
+
+#Decision Tree with Boosting
+#boost <- boosting(stars~., data=train1, boos=TRUE, mfinal=4)
+#summary(boost)
+#boost_prediction <- predict(boost, newdata = test)
+#boost_prediction
+
+#Random Forests
+#set.seed(1312)
+#model_RF<-randomForest(stars~.,data=train, ntree=25)
+#pred_RF_test = predict(model_RF, test)
+#mean(model_RF[["err.rate"]])
+
 
 #Decision Tree with Bagging
-bag <- bagging(stars~., data=train1, nbagg = 5, coob = TRUE, control = rpart.control(minsplit = 1000, cp = 10))
-bag #MSE 1.3074
+#bag <- bagging(stars~., data=train1, nbagg = 5, coob = TRUE, control = rpart.control(minsplit = 1000, cp = 10))
+#bag #MSE 1.3074
 
-
-library(corrplot)
-corrplot(cor(review_data_small[,-c(26,27)], use = "na.or.complete"))
-review_data_small[c("user_useful","user_funny","user_cool","user_fans","compliment_more","compliment_profile","compliment_cute","compliment_list","compliment_note","compliment_plain","compliment_cool","compliment_funny","compliment_writer")] <- list(NULL)
-corrplot(cor(review_data_small[,-c(11,12)], use = "na.or.complete"))
-review_data_small[c("checkin_number","city","month","day","useful","funny","yelping_since")] <- list(NULL)
-corrplot(cor(review_data_small[,-c(6)], use = "na.or.complete"))

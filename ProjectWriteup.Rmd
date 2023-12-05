@@ -1,43 +1,96 @@
 ---
 title: "Writeup"
-author: "Harris Goodman"
+author: "u2101274"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Github Link: https://github.com/Harris-Go/EC349_Project
+
+We're part of an academic community at Warwick.
+
+Whether studying, teaching, or researching, we’re all taking part in an expert conversation which must meet standards of academic integrity. When we all meet these standards, we can take pride in our own academic achievements, as individuals and as an academic community.
+
+Academic integrity means committing to honesty in academic work, giving credit where we've used others' ideas and being proud of our own achievements.
+
+In submitting my work I confirm that:
+
+1. I have read the guidance on academic integrity provided in the Student Handbook and understand the University regulations in relation to Academic Integrity. I am aware of the potential consequences of Academic Misconduct.
+
+2. I declare that the work is all my own, except where I have stated otherwise.
+
+3. No substantial part(s) of the work submitted here has also been submitted by me in other credit bearing assessments courses of study (other than in certain cases of a resubmission of a piece of work), and I acknowledge that if this has been done this may lead to an appropriate sanction.
+
+4. Where a generative Artificial Intelligence such as ChatGPT has been used I confirm I have abided by both the University guidance and specific requirements as set out in the Student Handbook and the Assessment brief. I have clearly acknowledged the use of any generative Artificial Intelligence in my submission, my reasoning for using it and which generative AI (or AIs) I have used. Except where indicated the work is otherwise entirely my own.
+
+5. I understand that should this piece of work raise concerns requiring investigation in relation to any of points above, it is possible that other work I have submitted for assessment will be checked, even if marks (provisional or confirmed) have been published.
+
+6. Where a proof-reader, paid or unpaid was used, I confirm that the proofreader was made aware of and has complied with the University’s proofreading policy.
+
+7. I consent that my work may be submitted to Turnitin or other analytical technology. I understand the use of this service (or similar), along with other methods of maintaining the integrity of the academic process, will help the University uphold academic standards and assessment fairness.
+
+# Analysis of the method (1249 words) 
+
 ## The Methodology - Problem Definition
-To approach this project, I used the General Data Science Mehodology by John Rallins due to its wide applicability and detailed process that would allow me to step through the project carefully. Although it is not always the best suited for teams, the methodology was effective for an indivdual project.
+
+To approach this project, I used the General Data Science Methodology by John Rallins due to its wide applicability and detailed process that would allow me to step through the project carefully. Although it is not always the best suited for teams, the methodology was effective for an individual project.
 The first step is understanding the problem which was predicting how many stars a certain user would give a business on yelp. The data provided was a selection from the Yelp database, comprising predominantly of user reviews, user account characteristics and information on the businesses. This data could be used to train a model that given equivalent data on a user and a business, could predict how many stars that user was likely to give the business.
 
 ## Data Understanding and Organisation
-With a vast selection of data available, it was important to understand how useful certain parts would be in answering the given question. Primarily, an understanding of the user and the business characteristics as well as their history with stars and ratings on yelp would provide a solid foundation to construct the model from. In order to make the data usable, it needed to be combined into a single dataset from the five smaller data sets. Initially, I removed all the open text fields from the data as although they could prove useful in predicting based on specific words in the text, this model is not using sentiment analysis. This also held for values like name of business and street address. Additionally, most of the business attribute fields were full of missing data, with as little as 0.03% of some categories having any data in. Despite dealing with missing data elsewhere in the project, the nature of these attributes of being very specific, often referring to specific sectors (ResaurantPriceRange2) and being difficult to impute, they were removed from the data to avoid reducing the analysis to only restaurants with no missing values.
-The data sets were then combined by matching the user and business id's together, In total, the data consisted of 33 independent variables across 1,398,056 observations. The data was then split into a training and test data set in order to have 10000 observations in the test set which would provide a sufficient test of the model without reducing too much information needed to train it.
-Large amounts of missing values were present with the users data but the nature (and potential importance) of this data made it more manageable to impute. When combined with the other fields, there was only user data for approximately 20% of reviews, attributed to a lack of account. As most of the data was count data, and was already skewed towards zero, the lack of account suggests that the user could also be attributed a zero value as any non-zero value would have been a false attribution of praise to the user and due to the fact it would have been applied in bulk, it would have shifted the distribution more than attributing a zero value to everyone. The most difficult data to impute was the user's stars as they were values in the range of 1 to 5 based on the user's average review. In this case the distribution was analysed and the median value was assigned to all the missing values which, although not ideal, was done to ensure the average was not misrepresented. The ideal solution would have been to assign all users without an account, and therefore missing the average stars value, the number of stars they provided for the review in question. Although this could have worked for the training data set, the nature of attempting to predict stars means that it would not work with the test data set as it would constitute information leak and would not be scalable when the model was applied to data to predict missing values of stars.
 
-##Modelling
-After plotting the data, it was clear that stars is a categorical variable with five potential categories. However, due to the nature of the categories having an order and that logically a person who voted a one was more likely to vote a two than any other number so they could be modeled using a linear regression model. The only two categorical variables in the cleaned data set was state and city, so they would need to be removed in order to run a regression model, but otherwise variables like business stars and user stars were already showing linear relation to the stars variable in the graphs. After creating a base linear model using all the data, the coefficients show that there are 17 coefficients with statistically significant correlation and one that has perfect collinearity with another independent variable. The linear model has a mean squared error of 1.502983. Due to the stars data being discrete and positive, the model was run with the poisson distribution, but the MSE was identical therefore, as the stars variable isn't technically count data the model will continue with the linear estimation. The results from the linear model show that not all the predictors are actually working to help predict and therefore the model can definitely be improved. By utilising a Least Absolute Shrinkage and Selection Operator (LASSO) model, it's penalisation parameter will reduce variables that are not helpful in predicting stars to zero, and shrink the others, especially useful with 31 variables.
+With a vast selection of data available, it was important to understand how useful certain parts would be in answering the given question. Primarily, an understanding of the user and the business characteristics as well as their history with stars and ratings on yelp would provide a solid foundation to construct the model from. Initially, I removed all the open text fields from the data as although they could prove useful in predicting based on specific words in the text, this model is not using sentiment analysis. Additionally, most of the business attribute fields were full of missing data, with as little as 0.03% of some categories having any data in. The nature of these attributes of being very specific, often referring to specific sectors (ResaurantPriceRange2) and being difficult to impute, they were removed from the data to avoid reducing the analysis to only restaurants with no missing values.
+The data sets were then combined, in total, the data consisted of 33 independent variables across 1,398,056 observations. The data was then split into a training and test data set to have 10000 observations in the test set which would provide a sufficient test of the model without reducing too much information needed to train it.
+Large amounts of missing values were present with the user’s data (about 80% missing) but the nature (and potential importance) of this data made it more manageable to impute. As most of the data was count data, and was already skewed towards zero, the missing data that suggested a lack of account meant the user could also be attributed a zero value as any non-zero value would have been a false attribution to the user and would have shifted the distribution more. The most difficult data to impute was the user's stars as they were values in the range of 1 to 5 based on the user's average review. In this case the distribution was analysed, and the median value was assigned to all the missing values which, although not ideal, was done to ensure the average was not misrepresented. 
 
+## Modelling
 
-## R Markdown
+Despite stars being a categorical variable, due to the nature of the categories having an order and that logically a person who voted a one was more likely to vote a two than any other number, they could be modelled using a linear regression model. The only two categorical variables in the cleaned data set were state and city, so they would need to be removed in order to run a regression model, but otherwise variables like business stars and user stars were already showing linear relation to the stars variable in the graphs. 
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+### Linear Models
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+After creating a base linear model using all the data, the coefficients show that there are 17 coefficients with statistically significant correlation and one that has perfect collinearity with another independent variable. The linear model has a mean squared error of 1.502983. Due to the stars data being discrete and positive, the model was run again with the Poisson distribution, but the MSE was much higher, at 7.83759, so shows no improvement on the original model, and when run with fewer variables (using only the significant ones), the model is also worse with an error of 7.837722. The results from the linear model show that not all the predictors are working to help predict and therefore the model can be improved.
 
-```{r cars}
-summary(cars)
-```
+### LASSO and Ridge
 
-## Including Plots
+By utilising a Least Absolute Shrinkage and Selection Operator (LASSO) model, it's penalisation parameter will reduce variables that are not helpful in predicting stars to zero, and shrink the others, especially useful with 31 variables. Using the LASSO model with a lambda value of 1 (arbitrarily picked at the minute), the MSE of the model is 2.18729 so is currently performing worse than the linear model. However, by utilising cross validation to split the training data set into 3 folds, it allows the model to be trained on two of the folds and then validated on the other fold; the optimal lambda value can be determined which will then be plugged back into the model. The value determined by cross validation was 0.005216 and using that in the LASSO model led to a MSE of 1.506196, which is slightly larger than the standard linear model's MSE. It achieved 29.4% correct values out of the total predictions. The original linear model accuracy is still marginally better, at 29.7%. Therefore, it appears keeping all the predictors involved may well improve the model, so the model was run with a ridge shrinkage estimator that smoothly shrinks all the predictors towards 0. The error of the ridge model was 1.509303, and the accuracy was 28.8% which were worse than the previous models. 
 
-You can also embed plots, for example:
+### Ordinal and Multinomial Model
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
+Another final option with the linear model was to implement an ordinal model that treats stars as an ordered categorical variable. This was implemented and used to predict stars, and performed much better than the linear model, predicting 51.2% of values correctly despite an error of 2.8946. This suggests that the straight linear model is not an accurate representation of the data. Interestingly, the ordinal model predicts only 5s and 1s, apart from 218 4s, which suggests that due to the shape of the data outlined earlier, it is better for the model to bank on either a 5 or a 1 than to worry about the values in the middle. The multinomial LASSO model was an even better prediction with an accuracy of 53.56%, the best of all the models, demonstrating the benefit of fitting the data correctly and using a shrinkage estimator to reduce the unnecessary predictors.
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+### Decision Tree
+
+To test whether the model created matches against an alternative option, a decision tree model was built and compared against the ordinal and multinomial models. The decision tree only had marginally better accuracy with 51.81% and equally predicted mostly 1-star and 5-star reviews with a small number of 4-star reviews. Therefore, the models are acting similarly despite using two very different approaches.
+
+## Evaluation
+
+The ordinal and multinomial models performed a lot better than the linear model because they fit the data much more accurately than their linear counterparts. It appears that there may not be much ability to increase accuracy because the descriptiveness of the data doesn't allow any model to predict well using the 2 and 3 stars. If the model was constructed initially with decision trees it would be possible to increase the predictive power of the tree slightly utilising bootstrap aggregating and random forests to reduce the variance in the predictors and the correlation between samples or boosting to improve the predictors by building trees on the residuals.
+
+##Table of Results
+
+| Model   | Code Name   | Features                                | MSE    | Accuracy | Misclassification  Error Rate |
+|---------|-------------|-----------------------------------------|--------|----------|-------------------------------|
+| Linear  | linear1     | All the data                            | 1.5029 | 29.76%   |                               |
+| Linear  | linear2     | Poisson Distribution                    | 7.8375 |          |                               |
+| Linear  | linear3     | Reduced Variables                       | 7.8377 |          |                               |
+| LASSO   | lasso1      | Lambda = 1                              | 2.1872 |          |                               |
+| LASSO   | lasso2      | Cross Validated                         | 1.5061 | 29.41%   |                               |
+| Ridge   | ridge1      | Cross Validated                         | 1.5093 | 28.89%   |                               |
+| Ordinal | ordinal     | Uses only business stars and user stars | 2.9252 | 51.24%   |                               |
+| LASSO   | lasso_multi | Multinomial                             | -16.38 | 53.56%   |                               |
+| Tree    | tree1       | Decision Tree                           |        | 51.81%   | 0.4819                        |
+
+## Methodology (127 words)
+
+I chose and implemented the General Data Science methodology created by John Rallins, which was easy to implement due to the detailed methodology which was clear to follow. Flexibility of the methodology allowed me to tidy the data first, and then attempt to model, but when the model needed a change in the parameters, I went back and adapted the data more. Additionally, I found the loop between modelling and evaluation was extremely apt as I often found in evaluating my model that I needed to rethink my approach. For example, the use of a linear model initially seemed to be well founded but ended up being a wrong approach, so rethinking my modelling allowed me to return and attempt ordinal models that were much more successful.
+
+## Challenges (193 words)
+
+The biggest challenge I faced was trying to deal with the computational restrictions imposed when dealing with large data sets. Initially I attempted to use the full-size data sets, but as I found out, R stores all data in the RAM, so a bottleneck in RAM made it impossible to stream in the data. Therefore, I used the smaller data sets to save RAM. This worked for the linear models, but when I came to apply the bagging, boosting and random trees models, the number of trees they had to build to be effective ensured they spent a huge amount of time running (Some of them took over 3 hours). I attempted to streamline the models by reducing the amount of bags, boosts or forests involved, and I looked at correlations between independent variables to work out if any could be removed as they suffered from multicollinearity. In the end, I decided to focus on the linear models as the computational limitations were lower, although the final multinomial LASSO model required a sample of observations to finish finding the cross validated results but could run the training and prediction on the full data. 
+
